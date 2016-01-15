@@ -12,26 +12,30 @@ import scipy.linalg as la
 
 # In[2]:
 
-N = 32
+N = 16
 p = N - 1
+E = 8
 Al, Bl, Cl, Dl, zl, wl = sem.semhat(p)
-Q = np.zeros((N, N-1))
-for i in range(N-1):
-    Q[i,i] = 1
+Q = np.zeros((N*E, p*E))
+for j in range(E):
+    for i in range(N):
+        if i+j*p == p*E:
+            continue
+        Q[i+j*N,i+j*p] = 1
 Q[-1,0] = 1
 Qt = Q.transpose()
-A = np.dot(Qt, np.dot(Al, Q))
-B = np.dot(Qt, np.dot(Bl, Q))
-D = np.dot(Qt, np.dot(Dl, Q))
+A = np.dot(Qt, np.dot(np.kron(np.identity(E), Al), Q))
+B = np.dot(Qt, np.dot(np.kron(np.identity(E), Bl), Q)) / E
+D = np.dot(Qt, np.dot(np.kron(np.identity(E), Dl), Q)) * E
 A = np.dot(D.transpose(), np.dot(B, D))
-C = np.dot(B, D)
-z = zl[:-1]
+C = np.dot(B, D) 
+z = np.zeros(p * E )
+for j in range(E):
+    z[j*p:(j+1)*p] = zl[:-1] + 2*j
+z = (z - (E-1))/E
 
 
 # In[3]:
-
-Re = 100
-visc = 2 / Re
 
 def bdf1(dt, x):
     y = la.solve(B - dt * (C-visc*A), np.dot(B, x[:,0]))
@@ -116,11 +120,11 @@ plt.plot(z, IC)
 
 # In[6]:
 
-Cycles = 16
-Re = 256
+Cycles = 8
+Re = 512
 visc = 2 / Re
 
-nsamp = 10
+nsamp = 9
 
 ref = simulate(IC, Cycles, 2.**(-(nsamp + 2)), bdf2)
 
@@ -170,47 +174,41 @@ def stabilityFunction(hTimesLambda, s):
 
 # In[9]:
 
-Re = 256
-visc = 2 / Re
-dt = 1./4.
-s = 3
+def plot_stability(Re, dt, s):
+    plt.plot(z, IC)
+    plt.plot(z, ref)
+    plt.plot(z, simulate(IC, Cycles, dt, bdf3))
+    plt.grid(True)
+    
+    ev = la.eigvals(dt*(C-visc*A), B)
+
+    x = np.linspace(np.min(np.real(ev)),5, num=200)
+    y = np.linspace(0,np.max(np.imag(ev)), num=200)
+    [X,Y] = np.meshgrid(x,y)
+    Z = np.zeros(X.shape)
+    for m in range(X.shape[0]):
+        for n in range(X.shape[1]):
+            Z[m,n] = stabilityFunction(X[m,n] + 1j * Y[m,n], s)
+
+    unstable_ev = []
+    for m in range(ev.shape[0]):
+        foo = stabilityFunction(ev[m], s)
+        if foo > 1.0:
+            unstable_ev.append(ev[m])
+            print("({:f}, {:f}) unstable with z = 1 + {:e}".format(ev[m].real, ev[m].imag, foo-1.))
+    unstable = np.array(unstable_ev)
+    
+    plt.figure(figsize=(10, 10))
+    plt.contour(X, Y, Z, [1], colors='k')
+    plt.contourf(X, Y, Z, [0,1], colors=[[1, 0.5, 0.8]])
+
+    plt.scatter(np.real(ev), np.imag(ev))
+    plt.scatter(np.real(unstable), np.imag(unstable), color='r')
+
+    plt.ylim(ymin=np.min(np.imag(ev))*1.1, ymax=np.max(np.imag(ev))*1.1)
 
 
 # In[10]:
 
-plt.plot(z, IC)
-plt.plot(z, ref)
-plt.plot(z, simulate(IC, Cycles, dt, bdf3))
-
-
-# In[11]:
-
-ev = la.eigvals(dt*(C-visc*A), B)
-
-x = np.linspace(np.min(np.real(ev)),0, num=200)
-y = np.linspace(0,np.max(np.imag(ev)), num=200)
-[X,Y] = np.meshgrid(x,y)
-Z = np.zeros(X.shape)
-for m in range(X.shape[0]):
-    for n in range(X.shape[1]):
-        Z[m,n] = stabilityFunction(X[m,n] + 1j * Y[m,n], s)
-
-unstable_ev = []
-for m in range(ev.shape[0]):
-    foo = stabilityFunction(ev[m], s)
-    if foo > 1.0:
-        unstable_ev.append(ev[m])
-unstable = np.array(unstable_ev)
-
-
-# In[12]:
-
-plt.figure(figsize=(10, 10))
-plt.contour(X, Y, Z, [1], colors='k')
-plt.contourf(X, Y, Z, [0,1], colors=[[1, 0.5, 0.8]])
-
-plt.scatter(np.real(ev), np.imag(ev))
-plt.scatter(np.real(unstable), np.imag(unstable), color='r')
-
-plt.ylim(ymin=np.min(np.imag(ev))*1.1, ymax=np.max(np.imag(ev))*1.1)
+plot_stability(2048, 1./16, 3)
 
