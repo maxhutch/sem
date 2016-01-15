@@ -12,7 +12,7 @@ import scipy.linalg as la
 
 # In[2]:
 
-N = 64
+N = 32
 p = N - 1
 Al, Bl, Cl, Dl, zl, wl = sem.semhat(p)
 Q = np.zeros((N, N-1))
@@ -116,13 +116,15 @@ plt.plot(z, IC)
 
 # In[6]:
 
-Cycles = 1
-Re = 100
+Cycles = 16
+Re = 256
 visc = 2 / Re
 
-ref = simulate(IC, Cycles, 2.**(-12), bdf2)
+nsamp = 10
 
-nsamp = 14
+ref = simulate(IC, Cycles, 2.**(-(nsamp + 2)), bdf2)
+
+
 dts = np.power(2., np.arange(0, -nsamp, -1))
 errs_2 = np.zeros(nsamp)
 errs_2o = np.zeros(nsamp)
@@ -135,16 +137,80 @@ for i in range(nsamp):
     errs_3[i]  = calculate_error(IC, ref, Cycles, dts[i], bdf3)
     errs_4[i]  = calculate_error(IC, ref, Cycles, dts[i], bdf4)
     errs_5[i]  = calculate_error(IC, ref, Cycles, dts[i], bdf5)
-plt.plot(-np.log2(dts), np.log2(errs_2))
-plt.plot(-np.log2(dts), np.log2(errs_3))
-plt.plot(-np.log2(dts), np.log2(errs_4))
-plt.plot(-np.log2(dts), np.log2(errs_2o))
-plt.plot(-np.log2(dts), np.log2(errs_5))
-plt.grid(True)
 
 
 # In[7]:
 
-ev = la.eigvals(C-visc*A)
+plt.plot(-np.log2(dts), np.log2(errs_2), label="BDF2")
+plt.plot(-np.log2(dts), np.log2(errs_3), label="BDF3")
+plt.plot(-np.log2(dts), np.log2(errs_4), label="BDF4")
+plt.plot(-np.log2(dts), np.log2(errs_2o),label="BDF2OPT")
+plt.plot(-np.log2(dts), np.log2(errs_5), label="BDF5")
+plt.grid(True);
+plt.ylim(ymax=2., ymin=-32);
+plt.legend(loc=3);
+
+
+# In[8]:
+
+# from https://commons.wikimedia.org/wiki/File:Stability_region_for_BDF1.svg
+BFDcoeffs = { 1: {'alpha': [1, -1], 'beta': 1},
+              2: { 'alpha': [3, -4, 1], 'beta': 2 },
+              3: { 'alpha': [11, -18, 9, -2], 'beta': 6 },
+              4: { 'alpha': [25, -48, 36, -16, 3], 'beta': 12 },
+              5: { 'alpha': [137, -300, 300, -200, 75, -12], 'beta': 60 },
+              6: { 'alpha': [147, -360, 450, -400, 225, -72], 'beta': 60 } }
+
+# Returns > 1 if argument is not in region of absolute stability
+def stabilityFunction(hTimesLambda, s):
+    stabPolyCoeffs = list(BFDcoeffs[s]['alpha'])
+    stabPolyCoeffs[0] -= hTimesLambda * BFDcoeffs[s]['beta']
+    return max(abs(np.roots(stabPolyCoeffs)))
+
+
+# In[9]:
+
+Re = 256
+visc = 2 / Re
+dt = 1./4.
+s = 3
+
+
+# In[10]:
+
+plt.plot(z, IC)
+plt.plot(z, ref)
+plt.plot(z, simulate(IC, Cycles, dt, bdf3))
+
+
+# In[11]:
+
+ev = la.eigvals(dt*(C-visc*A), B)
+
+x = np.linspace(np.min(np.real(ev)),0, num=200)
+y = np.linspace(0,np.max(np.imag(ev)), num=200)
+[X,Y] = np.meshgrid(x,y)
+Z = np.zeros(X.shape)
+for m in range(X.shape[0]):
+    for n in range(X.shape[1]):
+        Z[m,n] = stabilityFunction(X[m,n] + 1j * Y[m,n], s)
+
+unstable_ev = []
+for m in range(ev.shape[0]):
+    foo = stabilityFunction(ev[m], s)
+    if foo > 1.0:
+        unstable_ev.append(ev[m])
+unstable = np.array(unstable_ev)
+
+
+# In[12]:
+
+plt.figure(figsize=(10, 10))
+plt.contour(X, Y, Z, [1], colors='k')
+plt.contourf(X, Y, Z, [0,1], colors=[[1, 0.5, 0.8]])
+
 plt.scatter(np.real(ev), np.imag(ev))
+plt.scatter(np.real(unstable), np.imag(unstable), color='r')
+
+plt.ylim(ymin=np.min(np.imag(ev))*1.1, ymax=np.max(np.imag(ev))*1.1)
 
