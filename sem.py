@@ -8,15 +8,15 @@ def zwgll(p):
   import numpy as np
 
   n = p + 1
-  z = np.zeros(n)
-  w = np.zeros(n)
+  z = np.zeros(n, dtype=np.float64)
+  w = np.zeros(n, dtype=np.float64)
 
   z[0] = -1; z[-1] = 1
 
   if p == 2:
     z[1] = 0;
   elif p > 1:
-    M = np.zeros((p-1,p-1))
+    M = np.zeros((p-1,p-1), dtype=np.float64)
     for i in range(p-2):
       M[i,i+1] = 0.5 * np.sqrt( (i+1.) * (i+3.) / ( (i+1.5) * (i+2.5)))
       M[i+1,i] = M[i,i+1]
@@ -101,7 +101,7 @@ def fd_weights_full(xx,x,m):
   c1       = 1.
   c4       = x[0] - xx
 
-  c = np.zeros((n1,m1));
+  c = np.zeros((n1,m1), dtype=np.float64);
   c[0,0] = 1.;
 
   for i in range(n):
@@ -131,8 +131,8 @@ def dhat(x):
   from sem import fd_weights_full
   import numpy as np
   n1 = x.shape[0]
-  w = np.zeros((n1,2))
-  Dh = np.zeros((n1,n1));
+  w = np.zeros((n1,2), dtype=np.float64)
+  Dh = np.zeros((n1,n1), dtype=np.float64);
 
   for i in range(n1):
     w = fd_weights_full(x[i],x,1)
