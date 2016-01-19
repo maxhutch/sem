@@ -12,24 +12,24 @@ import scipy.linalg as la
 
 # In[2]:
 
-N = 16
+N = 8
 p = N - 1
 E = 8
 Al, Bl, Cl, Dl, zl, wl = sem.semhat(p)
-Q = np.zeros((N*E, p*E))
+Q = np.zeros((N*E, p*E), dtype=np.float64)
 for j in range(E):
     for i in range(N):
         if i+j*p == p*E:
             continue
-        Q[i+j*N,i+j*p] = 1
-Q[-1,0] = 1
+        Q[i+j*N,i+j*p] = 1.
+Q[-1,0] = 1.
 Qt = Q.transpose()
 A = np.dot(Qt, np.dot(np.kron(np.identity(E), Al), Q))
 B = np.dot(Qt, np.dot(np.kron(np.identity(E), Bl), Q)) / E
 D = np.dot(Qt, np.dot(np.kron(np.identity(E), Dl), Q)) * E
 A = np.dot(D.transpose(), np.dot(B, D))
 C = np.dot(B, D) 
-z = np.zeros(p * E )
+z = np.zeros(p * E, dtype=np.float64 )
 for j in range(E):
     z[j*p:(j+1)*p] = zl[:-1] + 2*j
 z = (z - (E-1))/E
@@ -44,66 +44,123 @@ def bdf1(dt, x):
     return y
 
 def bdf2(dt, x):
-    rhs = np.dot(B, 4./3.*x[:,0]- 1./3.*x[:,1])
+    rhs = np.dot(B, 4./3.*x[:,0]- 1./3.*x[:,2])
     scale = 2.*dt/3.
     y = la.solve(B - scale * (C-visc*A), rhs )
     return y
 
 def bdf3(dt, x):
-    rhs = np.dot(B, 18./11.*x[:,0]- 9./11.*x[:,1] + 2./11.*x[:,2])
+    rhs = np.dot(B, 18./11.*x[:,0]- 9./11.*x[:,2] + 2./11.*x[:,4])
     scale = 6.*dt/11.
     y = la.solve(B - scale * (C-visc*A), rhs )
     return y
 
 def bdf4(dt, x):
-    rhs = np.dot(B, 48./25.*x[:,0]- 36./25.*x[:,1] + 16./25.*x[:,2] - 3./25. * x[:,3])
+    rhs = np.dot(B, 48./25.*x[:,0]- 36./25.*x[:,2] + 16./25.*x[:,4] - 3./25. * x[:,6])
     scale = 12.*dt/25.
     y = la.solve(B - scale * (C-visc*A), rhs )
     return y
 
 def bdf5(dt, x):
-    rhs = np.dot(B, 300./137.*x[:,0]- 300./137.*x[:,1] + 200./137.*x[:,2] - 75./137. * x[:,3] + 12./137. * x[:,4])
+    rhs = np.dot(B, 300./137.*x[:,0]- 300./137.*x[:,2] + 200./137.*x[:,4] - 75./137. * x[:,6] + 12./137. * x[:,8])
     scale = 60.*dt/137.
     y = la.solve(B - scale * (C-visc*A), rhs )
     return y
 
 def bdf2opt(dt, x):
     beta = 0.48
-    rhs_2 = 4./3.*x[:,0]- 1./3.*x[:,1]
-    rhs_3 = 18./11.*x[:,0]- 9./11.*x[:,1] + 2./11.*x[:,2]
+    rhs_2 = 4./3.*x[:,0]- 1./3.*x[:,2]
+    rhs_3 = 18./11.*x[:,0]- 9./11.*x[:,2] + 2./11.*x[:,4]
     rhs = np.dot(B, beta*rhs_3 + (1-beta)*rhs_2)
     scale = beta * 6.*dt/11. + (1-beta) * 2.*dt/3.
     y = la.solve(B - scale * (C-visc*A), rhs )
     return y
 
+def bdf3ex3(dt, x):
+    scale = 6.*dt/11.
+    C_approx = 3 * x[:,1] - 3*x[:,3] + x[:,5]
+    rhs = np.dot(B, 18./11.*x[:,0]- 9./11.*x[:,2] + 2./11.*x[:,4]) + scale * C_approx
+    y = la.solve(B + scale*visc*A, rhs)
+    return y
+
+def bdf5ex3(dt, x):
+    scale = 60.*dt/137.
+    C_approx = 3 * x[:,1] - 3*x[:,3] + x[:,5]
+    rhs = np.dot(B, 
+                 300./137.*x[:,0]
+                 - 300./137.*x[:,2] 
+                 + 200./137.*x[:,4] 
+                 - 75./137. * x[:,6] 
+                 + 12./137. * x[:,8]) + scale * C_approx
+
+    y = la.solve(B + scale*visc*A, rhs)
+    return y
+
+def bdf2ex2(dt, x):
+    scale = 2.*dt/3.
+    C_approx = 2 * x[:,1] - 1*x[:,3]
+    rhs = np.dot(B, 4./3.*x[:,0]- 1./3.*x[:,2]) + scale * C_approx
+    y = la.solve(B + scale*visc*A, rhs )
+    return y
+
 
 # In[4]:
 
-def simulate(IC, Cycles, dt, advance):
+def simulate(IC, Cycles, dt, advance, sub = 1):
     NT = int(Cycles * 2 / dt)
     
-    dat = np.zeros((IC.size, 5))
-    dat[:,0] = IC
+    # Bootstrap
+    dat = np.zeros((IC.size, 10), dtype=np.float64)
+    boot = np.zeros((IC.size, 4), dtype=np.float64)
     
-    adv = bdf1(dt, dat)
-    dat = np.roll(dat, 1, 1)
-    dat[:,0] = adv
-    
-    adv = bdf2(dt, dat)
-    dat = np.roll(dat, 1, 1)
-    dat[:,0] = adv
+    boot[:,0] = IC.astype(np.float64)
+    boot[:,1] = np.dot(C, IC)
 
-    for i in range(NT-2):
+    dat[:,0] = boot[:,0]
+    dat[:,1] = boot[:,1]
+    
+    adv = bdf1(dt/sub, boot)
+    boot = np.roll(boot, 2, 1)
+    boot[:,0] = adv
+    boot[:,1] = np.dot(C, adv)
+    
+    if sub == 1:
+        dat = np.roll(dat, 2, 1)
+        dat[:,0] = boot[:,0]
+        dat[:,1] = boot[:,1]        
+
+    adv = bdf2(dt/sub, boot)
+    boot = np.roll(boot, 2, 1)
+    boot[:,0] = adv
+    boot[:,1] = np.dot(C, adv)
+
+    for i in range(2, 4*sub):
+        if i % sub == 0:
+            dat = np.roll(dat, 2, 1)
+            dat[:,0] = boot[:,0]
+            dat[:,1] = boot[:,1]
+
+        adv = bdf2(dt/sub, boot)
+        boot = np.roll(boot, 2, 1)
+        boot[:,0] = adv
+        boot[:,1] = np.dot(C, adv)
+
+    dat = np.roll(dat, 2, 1)
+    dat[:,0] = boot[:,0]
+    dat[:,1] = boot[:,1]
+    
+    for i in range(4, NT):
         adv = advance(dt, dat)
-        dat = np.roll(dat, 1, 1)
+        dat = np.roll(dat, 2, 1)
         dat[:,0] = adv
+        dat[:,1] = np.dot(C, adv)
         
     return adv
 
 
 
-def calculate_error(IC, ref, Cycles, dt, advance):
-    out = simulate(IC, Cycles, dt, advance)
+def calculate_error(IC, ref, Cycles, dt, advance, sub = 1):
+    out = simulate(IC, Cycles, dt, advance, sub)
         
     #err = np.exp(-np.square(z)/(4*visc*(2*Num + delta/(4*visc)) )) - bar
     err = ref - out
@@ -120,42 +177,66 @@ plt.plot(z, IC)
 
 # In[6]:
 
-Cycles = 8
-Re = 512
+Cycles = 1
+Re = 16384
 visc = 2 / Re
-
-nsamp = 9
-
-ref = simulate(IC, Cycles, 2.**(-(nsamp + 2)), bdf2)
-
-
-dts = np.power(2., np.arange(0, -nsamp, -1))
-errs_2 = np.zeros(nsamp)
-errs_2o = np.zeros(nsamp)
-errs_3 = np.zeros(nsamp)
-errs_4 = np.zeros(nsamp)
-errs_5 = np.zeros(nsamp)
-for i in range(nsamp):
-    errs_2[i]  = calculate_error(IC, ref, Cycles, dts[i], bdf2)
-    errs_2o[i] = calculate_error(IC, ref, Cycles, dts[i], bdf2opt)
-    errs_3[i]  = calculate_error(IC, ref, Cycles, dts[i], bdf3)
-    errs_4[i]  = calculate_error(IC, ref, Cycles, dts[i], bdf4)
-    errs_5[i]  = calculate_error(IC, ref, Cycles, dts[i], bdf5)
+ref = simulate(IC, Cycles, 2.**(-19), bdf2)
 
 
 # In[7]:
 
-plt.plot(-np.log2(dts), np.log2(errs_2), label="BDF2")
-plt.plot(-np.log2(dts), np.log2(errs_3), label="BDF3")
-plt.plot(-np.log2(dts), np.log2(errs_4), label="BDF4")
-plt.plot(-np.log2(dts), np.log2(errs_2o),label="BDF2OPT")
-plt.plot(-np.log2(dts), np.log2(errs_5), label="BDF5")
-plt.grid(True);
-plt.ylim(ymax=2., ymin=-32);
-plt.legend(loc=3);
+nsamp = 12
+
+dx_min = np.min(z[1:] - z[:-1])
+
+#dts = np.power(np.arange(1, nsamp+1, 1), -2.)
+foo = np.power(2, np.arange(0, nsamp)).astype(int)
+dts = 1./foo
+
+errs_2  = np.zeros(nsamp)
+errs_2o = np.zeros(nsamp)
+errs_3  = np.zeros(nsamp)
+errs_3e = np.zeros(nsamp)
+errs_4 = np.zeros(nsamp)
+errs_5 = np.zeros(nsamp)
+errs_5e = np.zeros(nsamp)
+
+num_sub = 19
+
+for i in range(nsamp):
+    subs = 2**(num_sub - i)
+    print(dts[i], subs)
+    errs_2[i]  = calculate_error(IC, ref, Cycles, dts[i], bdf2)
+    errs_2o[i] = calculate_error(IC, ref, Cycles, dts[i], bdf2opt, sub = subs)
+    errs_3[i]  = calculate_error(IC, ref, Cycles, dts[i], bdf3, sub = subs)
+    if dts[i] < 0.4 * dx_min:
+        print("Trying {}".format(dts[i]))
+        errs_3e[i]  = calculate_error(IC, ref, Cycles, dts[i], bdf3ex3, sub = subs)
+        errs_5e[i]  = calculate_error(IC, ref, Cycles, dts[i], bdf5ex3, sub = subs)
+    if dts[i] < 1./16:
+        errs_4[i]  = calculate_error(IC, ref, Cycles, dts[i], bdf4, sub = subs)
+        errs_5[i]  = calculate_error(IC, ref, Cycles, dts[i], bdf5, sub = subs)
 
 
 # In[8]:
+
+plt.figure(figsize=(10,10))
+plt.plot(-np.log2(dts), np.log2(errs_2), label="BDF2")
+plt.plot(-np.log2(dts), np.log2(errs_3), label="BDF3")
+plt.plot(-np.log2(dts), np.log2(errs_3e), label="BDF3EX3")
+plt.plot(-np.log2(dts), np.log2(errs_2o),label="BDF2OPT")
+plt.plot(-np.log2(dts), np.log2(errs_4), label="BDF4")
+plt.plot(-np.log2(dts), np.log2(errs_5), label="BDF5")
+plt.plot(-np.log2(dts), np.log2(errs_5e), label="BDF5EX3")
+plt.grid(True);
+plt.ylim(ymax=2., ymin=-32);
+plt.legend(loc=3);
+print(np.log2(errs_4[-2]/errs_4[-1]))
+print(np.log2(errs_5[-2]/errs_5[-1]))
+print(np.log2(errs_5e[-2]/errs_5e[-1]))
+
+
+# In[9]:
 
 # from https://commons.wikimedia.org/wiki/File:Stability_region_for_BDF1.svg
 BFDcoeffs = { 1: {'alpha': [1, -1], 'beta': 1},
@@ -172,17 +253,22 @@ def stabilityFunction(hTimesLambda, s):
     return max(abs(np.roots(stabPolyCoeffs)))
 
 
-# In[9]:
+# In[10]:
 
-def plot_stability(Re, dt, s):
+def plot_stability(Re, dt, s, c = 8, advance=bdf3ex3):
+    visc = 2. / Re
     plt.plot(z, IC)
-    plt.plot(z, ref)
-    plt.plot(z, simulate(IC, Cycles, dt, bdf3))
+    #plt.plot(z, ref)
+    plt.plot(z, simulate(IC, c, dt, advance))
     plt.grid(True)
+
+    ev = la.eigvals(dt*C, B)
+    #plt.figure(figsize=(10, 10))
+    #plt.scatter(np.real(ev), np.imag(ev))
     
     ev = la.eigvals(dt*(C-visc*A), B)
 
-    x = np.linspace(np.min(np.real(ev)),5, num=200)
+    x = np.linspace(np.min(np.real(ev)),0, num=200)
     y = np.linspace(0,np.max(np.imag(ev)), num=200)
     [X,Y] = np.meshgrid(x,y)
     Z = np.zeros(X.shape)
@@ -204,11 +290,18 @@ def plot_stability(Re, dt, s):
 
     plt.scatter(np.real(ev), np.imag(ev))
     plt.scatter(np.real(unstable), np.imag(unstable), color='r')
+    ev_A = la.eigvals(-dt*visc*A, B)
+    plt.scatter(np.real(ev_A), np.imag(ev_A), color='g')
+    ev_C = la.eigvals(dt*C, B)
+    plt.scatter(np.real(ev_C), np.imag(ev_C), color='y')
 
+    plt.grid(True)
     plt.ylim(ymin=np.min(np.imag(ev))*1.1, ymax=np.max(np.imag(ev))*1.1)
 
 
-# In[10]:
+# In[11]:
 
-plot_stability(2048, 1./16, 3)
+Re = 1024
+visc = 2. / Re
+plot_stability(Re, 1./64, 4, 1, bdf4)
 
