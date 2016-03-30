@@ -46,24 +46,27 @@ def wall_units(yl, Nz, p, Re, plot=False):
     return ym, y1, y10, zn
 
 def plot_units(yms, y1s, y10s, zms, line=None):
-    plt.plot(alphs,yms, label='Ym')
-    plt.plot(alphs,y1s, label='y4')
-    plt.plot(alphs,y10s, label='y10')
-    plt.plot(alphs,zms, label = 'Zm')
+    plt.plot(alphs,yms, label='max[Delta y]')
+    plt.plot(alphs,y1s, label='y(4)')
+    plt.plot(alphs,y10s, label='y(10)')
+    plt.plot(alphs,zms, label = 'max[Delta z]')
     plt.axhline(1.0, color='green')
     plt.axhline(6.0, color='red')
     plt.axhline(5.0, color='blue')
     if line is not None:
-        plt.axvline(line)
+        plt.axvline(line, color='black')
     plt.grid()
     plt.legend()
     plt.xlabel('alpha')
+    plt.ylabel('Wall units')
 
+
+# Find the best $\alpha$ for $p = 31, N_y = 64, N_z = 512$
 
 # In[4]:
 
 alphs = list(np.linspace(0,pi/2, 16, endpoint=False))
-Re=4300;
+Re=4000;
 N = 31
 Nl = 65
 Nz = 513
@@ -78,6 +81,8 @@ for alph in alphs:
 
 plot_units(yms, y1s, y10s, zms, .28)
 
+
+# Find the best $\alpha$ for $p = 7, N_y = 256, N_z = 2048$
 
 # In[5]:
 
@@ -96,4 +101,20 @@ for alph in alphs:
     zms.append(zm)
 
 plot_units(yms, y1s, y10s, zms, .1)
+
+
+# Print out the corner positions for $p = 31$
+
+# In[6]:
+
+yl=mesh(.28, 65)
+print(yl)
+
+
+# Print out the corner positions for $p = 7$
+
+# In[7]:
+
+yl=mesh(.1, 257)
+print(yl)
 
