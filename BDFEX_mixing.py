@@ -3,7 +3,7 @@
 
 # # Analysis of mixed BDF/EX time integration
 
-# In[1]:
+# In[ ]:
 
 get_ipython().magic('matplotlib inline')
 import numpy as np
@@ -29,7 +29,7 @@ from scipy.optimize import basinhopping
 # 
 # The standard coefficients, those which achieve maximal convergence order, are found below.
 
-# In[2]:
+# In[ ]:
 
 bdf1 = np.array([  1., -  1.,   0.,    0.,   0.,   0.,  0.])/ 1.
 bdf2 = np.array([  3., -  4.,   1.,    0.,   0.,   0.,  0.])/ 2.
@@ -60,7 +60,7 @@ ex6  = np.array([0., 6., -15., 20., -15., 6., -1.])
 # 
 # The code-block below traces the stability region and returns the location of the first crossing of the imaginary axis.
 
-# In[3]:
+# In[ ]:
 
 theta = np.linspace(0, 2*np.pi, endpoint=False, num=512)
 E = np.zeros((theta.shape[0], 7), dtype=complex)
@@ -88,21 +88,23 @@ def stab_region(time, space, num=512, plot=True, label=""):
 
 # For example, the stability regions of BDF2/EX2 and BDF3/EX3 are below:
 
-# In[4]:
+# In[ ]:
 
-print("The maximum convection eigenvalue for BDF2/EX2 is {}".format(
-        stab_region(bdf2, ex2, label="BDF2/EX2")))
+print("The maximum convection eigenvalue for BDF2/EX3 is {}".format(
+        stab_region(bdf1, ex3, label="BDF2/EX2")))
 print("The maximum convection eigenvalue for BDF3/EX3 is {}".format(
         stab_region(bdf3, ex3, label="BDF3/EX3")))
+print("The maximum convection eigenvalue for BDF4/EX4 is {}".format(
+        stab_region(bdf4, ex4, label="BDF4/EX4")))
 
 
 # From this, it is clear to see that BDF2/EX2 is not suitable for the convection operator but BDF3/EX3 is.  
 # Interestingly, BDF2/EX3 is stable, so this is the 2nd order scheme implemented in codes like Nek5000.
 
-# In[5]:
+# In[ ]:
 
 print("The maximum convection eigenvalue for BDF2/EX2 is {}".format(
-        stab_region(bdf2, ex3, label="BDF2/EX2")))
+        stab_region(bdf2, 2./3.*ex3+1./3.*ex2, label="BDF2/EX2")))
 
 
 # ## Mixing BDF3/EX3 and BDF2/EX2
@@ -110,7 +112,7 @@ print("The maximum convection eigenvalue for BDF2/EX2 is {}".format(
 # Following the method of Vatsa et al. for BDF2OPT, we can mix the coefficients of the second and third order schemes to produce 2nd order schemes with different stability regions and leading order error coefficients.
 # In this case, we have two sets of coefficients that can be mixed separately, so we need two mixing parameters: let $\alpha$ mix the extrapolation coefficients and $\beta$ mix the BDF coefficients.
 
-# In[6]:
+# In[ ]:
 
 def mix_bdfex_23(alpha, beta, plot=False):
     res = stab_region((1.-beta)*bdf2+beta*bdf3,
@@ -121,23 +123,41 @@ def mix_bdfex_23(alpha, beta, plot=False):
     return res
 
 
-# In[7]:
+# In[ ]:
 
-interact(mix_bdfex_23, alpha=.5, beta=.5, plot=True);
+def mix_bdfex_2all(alpha, beta, plot=False):
+    res = stab_region(bdf2,
+                      (1.-alpha-beta)*ex2+alpha*ex3+beta*ex4,
+                     plot=plot);
+    if plot:
+        print("The eigenvalue for BDF/EX-2,3({},{}) is {}".format(alpha, beta, res))
+    return res
+
+
+# In[ ]:
+
+interact(mix_bdfex_23, alpha=.667, beta=.48, plot=True);
+
+
+# In[ ]:
+
+interact(mix_bdfex_2all, alpha=.667, beta=.1, plot=True);
 
 
 # We can maximize the stability constraint.  The constraint $\alpha \ge 0$ must be added, because $\alpha < 0$ consistently results in instability (I don't know why). 
 
-# In[8]:
+# In[ ]:
 
 def wrap(x):
     return -mix_bdfex_23(x[0], x[1])
 def accept(f_new, x_new, f_old, x_old):
     if x_new[0] < 0:
         return False
+#    if x_new[1] < 0:
+#        return False
     return True
 res = basinhopping(wrap, 
-                   [1.0, 0.0], 
+                   [1.0, 1.0], 
                    accept_test=accept,
                    minimizer_kwargs={'method': 'SLSQP', 'bounds': [(0, None), (None, None)]}, 
                    niter=1000, 
@@ -146,9 +166,15 @@ res = basinhopping(wrap,
 mix_bdfex_23(res.x[0], res.x[1], plot=True);
 
 
+# In[ ]:
+
+plt.figure(figsize=(15,15))
+mix_bdfex_23(0.00513949945148418,-1.490579000429718, plot=True);
+
+
 # And plot the stability constraint in the neighborhood of the minimum:
 
-# In[9]:
+# In[ ]:
 
 n = 200
 alphas = np.linspace(0., 1., num=n)
@@ -166,7 +192,7 @@ foo = np.unravel_index(np.argmax(cfls), cfls.shape)
 
 # The same procedure can be used to mix BDF/EX3 and BDF/EX4.
 
-# In[10]:
+# In[ ]:
 
 def mix_bdfex_34(alpha, beta, plot=False):
     res = stab_region((1.-beta)*bdf3+beta*bdf4,
@@ -177,20 +203,22 @@ def mix_bdfex_34(alpha, beta, plot=False):
     return res
 
 
-# In[11]:
+# In[ ]:
 
 interact(mix_bdfex_34, alpha=.5, beta=.5, plot=True);
 
 
 # We can maximize the stability constraint.  Again, we must impose $\alpha \ge 0$.
 
-# In[12]:
+# In[ ]:
 
 def wrap(x):
     return -mix_bdfex_34(x[0], x[1])
 def accept(f_new, x_new, f_old, x_old):
     if x_new[0] < 0:
         return False
+#    if x_new[1] < 0:
+#        return False
     return True
 res = basinhopping(wrap, 
                    [0.5, 0.5], 
@@ -204,7 +232,7 @@ mix_bdfex_34(res.x[0], res.x[1], plot=True);
 
 # And plot the stability constraint in the neighborhood of the minimum:
 
-# In[13]:
+# In[ ]:
 
 n = 200
 alphas = np.linspace(0., 1., num=n)
@@ -216,4 +244,114 @@ for i in range(n):
 plt.imshow(cfls.transpose(), origin='lower')
 plt.colorbar()
 foo = np.unravel_index(np.argmax(cfls), cfls.shape)
+
+
+# In[ ]:
+
+mix_bdfex_34(0,-1.4682977182989303, plot=True)
+
+
+# In[ ]:
+
+def mix_bdfex_24(alpha, beta, plot=False):
+    res = stab_region((1.-beta)*bdf2+beta*bdf4,
+                      (1.-alpha)*ex2+alpha*ex4,
+                     plot=plot);
+    if plot:
+        print("The eigenvalue for BDF/EX-2,4({},{}) is {}".format(alpha, beta, res))
+    return res
+
+
+# In[ ]:
+
+def wrap(x):
+    return -mix_bdfex_24(x[0], x[1])
+def accept(f_new, x_new, f_old, x_old):
+    if x_new[0] < 0:
+        return False
+#    if x_new[1] < 0:
+#        return False
+#    if x_new[0] + x_new[1] > 1.0:
+#        return False
+#    if x_new[2] < 0:
+#        return False
+#    if x_new[3] < 0:
+#        return False
+#    if x_new[2] + x_new[3] > 1.0:
+#        return False
+#    if x_new[1] < 0:
+#        return False
+    return True
+
+res = basinhopping(wrap, 
+                   [1.0, 1.0], 
+                   accept_test=accept,
+                   minimizer_kwargs={'method': 'SLSQP', 'bounds': [(0, None), (None, None)]}, 
+                   niter=1000, 
+                   niter_success=500, 
+                   T=0.01)
+mix_bdfex_24(res.x[0], res.x[1], plot=True);
+
+
+# In[ ]:
+
+def mix_bdfex_234(alpha1, alpha2, beta1, beta2, plot=False):
+    res = stab_region((1.-beta1 - beta2)*bdf2+beta1*bdf3 + beta2*bdf4,
+                      (1.-alpha1 - alpha2)*ex2+alpha1*ex3 + alpha2*ex4,
+                     plot=plot);
+    if plot:
+        print("The eigenvalue for BDF/EX-2,3,4({}-{},{}-{}) is {}".format(alpha1, alpha2, beta1, beta2, res))
+    return res
+
+
+# In[ ]:
+
+interact(mix_bdfex_234, alpha1=.667, alpha2=0., beta1=.48, beta2 = 0., plot=True);
+
+
+# In[ ]:
+
+plt.figure(figsize=(15,15))
+mix_bdfex_234(.633, .4, -.48, 0.0, plot=True)
+
+
+# In[ ]:
+
+mix_bdfex_234(0,-0.250000001,-2.5,-3, plot=True)
+
+
+# In[ ]:
+
+def wrap(x):
+    return -mix_bdfex_234(x[0], x[1], x[2], x[3])
+def accept(f_new, x_new, f_old, x_old):
+    if x_new[0] < 0:
+        return False
+#    if x_new[1] < 0:
+#        return False
+#    if x_new[0] + x_new[1] > 1.0:
+#        return False
+#    if x_new[2] < 0:
+#        return False
+#    if x_new[3] < 0:
+#        return False
+#    if x_new[2] + x_new[3] > 1.0:
+#        return False
+#    if x_new[1] < 0:
+#        return False
+    return True
+
+res = basinhopping(wrap, 
+                   [1.0, 0.0, 1.0, 0.0], 
+                   accept_test=accept,
+                   minimizer_kwargs={'method': 'SLSQP', 'bounds': [(-1, 1), (-1, 1), (-1, 1), (-1, 1)]}, 
+                   niter=100, 
+                   niter_success=50, 
+                   T=0.01)
+mix_bdfex_234(res.x[0], res.x[1], res.x[2], res.x[3], plot=True);
+
+
+# In[ ]:
+
+
 
